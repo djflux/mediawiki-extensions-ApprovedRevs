@@ -206,30 +206,38 @@ class ApprovedRevs {
 		// properties for the parser functions - for some reason,
 		// calling the standard getProperty() function doesn't work, so
 		// we just do a DB query on the page_props table.
-		$dbr = wfGetDB( DB_REPLICA );
-		$count = $dbr->selectField( 'page_props', 'COUNT(*)',
-			[
-				'pp_page' => $title->getArticleID(),
-				'pp_propname' => [
-					'approvedrevs-approver-users', 'approvedrevs-approver-groups'
-				],
-			],
-			__METHOD__
-		);
+		$lb = MediaWikiServices::getInstance()->getDBLoadBalancer();
+		$dbr = $lb->getConnectionRef( DB_REPLICA );
+
+		$count = $dbr->newSelectQueryBuilder()
+				->select( 'COUNT(*)' )
+				->from( 'page_props' )
+				->where( [
+						'pp_page = ' . $title->getArticleID(),
+						'pp_propname' => [
+							'approvedrevs-approver-users', 'approvedrevs-approver-groups'
+						],
+					] )
+				->caller( __METHOD__ )
+				->fetchField();
+
 		if ( $count > 0 ) {
 			$title->isApprovable = true;
 			return $title->isApprovable;
 		}
 
 		// parser function page properties not present. Check for magic word.
-		$count = $dbr->selectField( 'page_props', 'COUNT(*)',
-			[
-				'pp_page' => $title->getArticleID(),
-				'pp_propname' => 'approvedrevs',
-				'pp_value' => 'y'
-			],
-			__METHOD__
-		);
+		$count = $dbr->newSelectQueryBuilder()
+				->select( 'COUNT(*)' )
+				->from( 'page_props' )
+				->where( [
+						'pp_page = ' . $title->getArticleID(),
+						'pp_propname = \'approvedrevs\'',
+						'pp_value = \'y\'',
+					 ])
+				->caller( __METHOD__ )
+				->fetchField();
+
 		$isApprovable = ( $count == '1' );
 		$title->isApprovable = $isApprovable;
 		return $isApprovable;
